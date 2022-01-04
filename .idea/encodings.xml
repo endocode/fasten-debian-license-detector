@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/analyzer/graph-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/graph-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/javacg-opal/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/javacg-opal/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/license-detector/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/license-detector/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/license-feeder/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/license-feeder/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/metadata-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/metadata-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/pom-analyzer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/pom-analyzer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/quality-analyzer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/quality-analyzer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/repo-analyzer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/repo-analyzer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/repo-cloner-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/repo-cloner-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/restapi-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/restapi-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-cache-invalidation-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-cache-invalidation-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-cache-processor-plugin/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-cache-processor-plugin/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-consumer/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/analyzer/vulnerability-consumer/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/core/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/core/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/server/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/server/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+  </component>
+</project>

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CompilerConfiguration">
+    <annotationProcessing>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="server" />
+        <module name="restapi-plugin" />
+        <module name="core" />
+      </profile>
+      <profile name="Annotation profile for parent" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <processor name="org.pf4j.processor.ExtensionAnnotationProcessor" />
+        <module name="vulnerability-cache-invalidation-plugin" />
+        <module name="quality-analyzer" />
+        <module name="license-feeder" />
+        <module name="vulnerability-cache-processor-plugin" />
+        <module name="vulnerability-consumer" />
+        <module name="repo-cloner-plugin" />
+        <module name="metadata-plugin" />
+        <module name="pom-analyzer" />
+        <module name="repo-analyzer" />
+        <module name="graph-plugin" />
+        <module name="javacg-opal" />
+        <module name="license-detector" />
+      </profile>
+    </annotationProcessing>
+  </component>
+</project>
