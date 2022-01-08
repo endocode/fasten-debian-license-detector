@@ -79,15 +79,16 @@ public class LicenseDetectorPlugin extends Plugin {
                 reset();
 
                 logger.info("Debian license detector started.");
-
+                // Retrieving the repo URL
+                String repoUrl = extractRepoURL(record);
                 // Retrieving the package name
                 String packageName = extractPackageName(record);
-
+                logger.info("The package to analyze is:"+packageName+".");
                 // Retrieving the package version
                 String packageVersion = extractPackageVersion(record);
-
+                logger.info("The package version is:"+packageVersion+".");
                 // Debian outbound license detection
-                detectedLicenses.setOutbound(getDebianOutboundLicenses(packageName, packageVersion));
+                detectedLicenses.setOutbound(getDebianOutboundLicenses(packageName, packageVersion, repoUrl));
                 if (detectedLicenses.getOutbound() == null || detectedLicenses.getOutbound().isEmpty()) {
                     logger.warn("No Debian outbound licenses were detected.");
                 } else {
@@ -100,14 +101,14 @@ public class LicenseDetectorPlugin extends Plugin {
 
                 // FROM HERE TO COMPLETELY REVIEW
                 // Detecting inbound licenses by scanning the project
-                String scanResultPath = scanProject(repoPath);
+                String JSONFileWithLicensesInformationForFiles = analyzeProject(packageName,packageVersion);
 
-                // Parsing the result
-                JSONArray fileLicenses = parseScanResult(scanResultPath);
+                // Parsing the JSON created by the analyzeProject function
+                JSONArray fileLicenses = parseScanResult(JSONFileWithLicensesInformationForFiles);
                 if (fileLicenses != null && !fileLicenses.isEmpty()) {
                     detectedLicenses.addFiles(fileLicenses);
                 } else {
-                    logger.warn("Scanner hasn't detected any licenses in " + scanResultPath + ".");
+                    logger.warn("The analyzer hasn't detected any licenses in " + JSONFileWithLicensesInformationForFiles + ".");
                 }
 
             } catch (Exception e) { // Fasten error-handling guidelines
@@ -116,6 +117,8 @@ public class LicenseDetectorPlugin extends Plugin {
             }
         }
 
+        // this method first get the license from one of the copyrights files (copyright, license or readme), if
+        // these files are not present try to retrieve the outbound license from github, using the repourl.
         /**
          * Retrieves the outbound license(s) of the input project.
          *
@@ -123,7 +126,7 @@ public class LicenseDetectorPlugin extends Plugin {
          * @param packageVersion the version of the package to be scanned.
          * @return the set of detected outbound licenses.
          */
-        protected Set<DetectedLicense> getDebianOutboundLicenses(String packageName, String packageVersion) {
+        protected Set<DetectedLicense> getDebianOutboundLicenses(String packageName, String packageVersion, String repoUrl) {
 
             try {
                 // Retrieving the outbound license(s) from the copyright file
@@ -131,7 +134,7 @@ public class LicenseDetectorPlugin extends Plugin {
 
             } catch (FileNotFoundException | RuntimeException | XmlPullParserException e) {
 
-                // In case retrieving the outbound license from the local `pom.xml` file was not possible
+                // In case retrieving the outbound license from the copights  files was not possible
                 logger.warn(e.getMessage(), e.getCause()); // why wasn't it possible
                 logger.info("Retrieving outbound license from GitHub...");
                 if ((detectedLicenses.getOutbound() == null || detectedLicenses.getOutbound().isEmpty())
@@ -327,6 +330,24 @@ public class LicenseDetectorPlugin extends Plugin {
         }
 
         /**
+         * Retrieves the repository URL from the input record.
+         *
+         * @param record the input record containing repository information.
+         * @return the input repository URL.
+         */
+        @Nullable
+        protected String extractRepoURL(String record) {
+            var payload = new JSONObject(record);
+            if (payload.has("fasten.RepoCloner.out")) {
+                payload = payload.getJSONObject("fasten.RepoCloner.out");
+            }
+            if (payload.has("payload")) {
+                payload = payload.getJSONObject("payload");
+            }
+            return payload.getString("repoUrl");
+        }
+
+        /**
          * Retrieves the copyright file given a package name and the package version path.
          *
          * @param packageName the package name to be analyzed.
@@ -450,70 +471,43 @@ public class LicenseDetectorPlugin extends Plugin {
          * Scans a repository looking for license text in files with scancode.
          *
          * @param repoPath the repository path whose pom.xml file must be retrieved.
-         * @return the path of the file containing the result.
+         * @return the URL where the license retrievel at the file level started.
          * @throws IOException          in case scancode couldn't start.
          * @throws InterruptedException in case this function couldn't wait for scancode to complete.
          * @throws RuntimeException     in case scancode returns with an error code != 0.
          */
-        protected String scanProject(String repoPath) throws IOException, InterruptedException, RuntimeException {
+        protected String analyzeProject(String packageName, String packageVersion) throws IOException, InterruptedException, RuntimeException {
 
             // Where is the result stored
-            String resultPath = repoPath + "/scancode.json";
+            String retrieveLicensesInformationForFiles = //JSON name
+                    // TODO
 
-            // `scancode` command to be executed
-            List<String> cmd = Arrays.asList(
-                    "/bin/bash",
-                    "-c",
-                    "scancode " +
-                    // Scan for licenses
-                    "--license " +
-                    // Report full, absolute paths
-                    "--full-root " +
-                    // Scan using n parallel processes
-                    "--processes " + "$(nproc) " +
-                    // Write scan output as a compact JSON file
-                    "--json " + resultPath + " " +
-                    // SPDX RDF file
-                    // "--spdx-rdf " + repoPath + "/scancode.spdx.rdf" + " " +
-                    // SPDX tag/value file
-                    // "--spdx-tv " + repoPath + "/scancode.spdx.tv " + " " +
-                    /*  Only return files or directories with findings for the requested scans.
-                        Files and directories without findings are omitted
-                        (file information is not treated as findings). */
-                    "--only-findings " +
-                    // TODO Scancode timeout?
-                    // "--timeout " + "600.0 " +
-                    // Repository directory
-                    repoPath
-            );
 
-            // Start scanning
-            logger.info("Scanning project in " + repoPath + "...");
-            ProcessBuilder pb = new ProcessBuilder(cmd);
-            pb.inheritIO();
-            Process p = null;
-            int exitCode = Integer.MIN_VALUE;
-            try {
-                p = pb.start(); // start scanning the project
-                exitCode = p.waitFor();// synchronous call
-            } catch (IOException e) {
-                if (p != null) {
-                    p.destroy();
-                }
-                throw new IOException("Couldn't start the scancode analyzer: " + e.getMessage(), e.getCause());
-            } catch (InterruptedException e) {
-                if (p != null) {
-                    p.destroy();
-                }
-                throw new InterruptedException("Couldn't wait for scancode to complete: " + e.getMessage());
+
+            // Start analyzing
+            logger.info("Retrieving license information at the file level for: " + packageName + "; version: "+ packageVersion +" .");
+            URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            if (conn.getResponseCode() != 200) {
+                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
             }
-            if (exitCode != 0) {
-                throw new RuntimeException("Scancode returned with exit code " + exitCode + ".");
-            }
+            InputStreamReader in = new InputStreamReader(conn.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String jsonOutput = br.lines().collect(Collectors.joining());
+            // searching for the copyright files in the JSON response
+            var jsonOutputPayload = new JSONObject(jsonOutput);
+            if (jsonOutputPayload.has("content")) {
+                JSONArray array2 = jsonOutputPayload.getJSONArray("content");
+                // TODO implement recursivity for checksum retrieval,
+                //  after that, the creation of a JSON object that stores at least
+                // file path and license retrieved
 
-            logger.info("...project in " + repoPath + " scanned successfully.");
 
-            return resultPath;
+            logger.info("Analysis for " + + packageName + " version: "+ packageVersion +" completed.");
+
+            return retrieveLicensesInformationForFiles;
         }
 
         /**
