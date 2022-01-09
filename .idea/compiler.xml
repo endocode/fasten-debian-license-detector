@@ -25,8 +25,8 @@
         <module name="pom-analyzer" />
         <module name="repo-analyzer" />
         <module name="graph-plugin" />
-        <module name="javacg-opal" />
         <module name="license-detector" />
+        <module name="javacg-opal" />
       </profile>
     </annotationProcessing>
   </component>

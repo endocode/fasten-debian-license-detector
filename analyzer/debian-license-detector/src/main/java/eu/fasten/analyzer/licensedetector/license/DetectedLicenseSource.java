@@ -3,11 +3,13 @@ package eu.fasten.analyzer.licensedetector.license;
 /**
  * Where a certain licenses has been retrieved from.
  */
+
+//here probably goes from which file the  outbound license is retrieved.
 public enum DetectedLicenseSource {
 
-    LOCAL_POM("Local pom file"),
-    MAVEN_CENTRAL("Maven central"),
-    GITHUB("GitHub APIs");
+    DEBIAN_API("Debian API"),
+    //MAVEN_CENTRAL("Maven central"),
+    //GITHUB("GitHub APIs");
 
     private final String description;
 

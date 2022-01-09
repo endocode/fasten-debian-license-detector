@@ -382,6 +382,7 @@ public class LicenseDetectorPlugin extends Plugin {
                 if (name.toLowerCase().contains(copyright)) {
                     String checksum = RetrieveChecksum(name, packageName, packageVersion);
                     if (checksum != null) {
+                        // the following String should be modified in a JSONObject, and then parsing the license key
                         String license = RetrieveLicense(checksum, packageName, packageVersion);
                         System.out.println("The license retrieved is: "+license);
                         if (license != null) {
@@ -414,10 +415,10 @@ public class LicenseDetectorPlugin extends Plugin {
             }
         } else {
             System.out.println(" No contents key in this JSON");
-        }    
-
-
-        private static String RetrieveChecksum(String fileName, String packageName, String packageVersion) throws IOException {
+        }
+        }
+        // retrieve checksum for a given file
+        protected String RetrieveChecksum(String fileName, String packageName, String packageVersion) throws IOException {
             URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/" + "/" + fileName + "/");
             String checksum = null;
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -437,9 +438,14 @@ public class LicenseDetectorPlugin extends Plugin {
             return checksum;
         }
 
-        private static String RetrieveLicense(String checksum, String packageName, String packageVersion) throws IOException {
+        // return a JSONObject with license and filePath of a given checksum
+        protected JSONObject RetrieveLicense(String checksum, String packageName, String packageVersion) throws IOException {
             URL url = new URL("https://sources.debian.org/copyright/api/sha256/?checksum=" + checksum + "&package=" + packageName);
             String license = null;
+            String filePath = null;
+            //initialize an empty JSONObject
+            JSONObject licenseAndFilePath = new JSONObject();
+
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "application/json");
@@ -459,14 +465,15 @@ public class LicenseDetectorPlugin extends Plugin {
                         String version = obj2.getString("version");
                         if (version.equals(packageVersion)){
                             license = obj2.getString("license");
+                            filePath = obj2.getString("path");
+                            licenseAndFilePath.put("license", license);
+                            licenseAndFilePath.put("path", filePath);
                         }
                     }
                 }
             }
-            return license;
+            return licenseAndFilePath;
         }
-}
-
         /**
          * Scans a repository looking for license text in files with scancode.
          *
@@ -503,9 +510,18 @@ public class LicenseDetectorPlugin extends Plugin {
                 // TODO implement recursivity for checksum retrieval,
                 //  after that, the creation of a JSON object that stores at least
                 // file path and license retrieved
+                // ###### HERE SOMETHING LIKE:##########
+                // for all the elements in content:
+                //      if element is file:
+                //          RetrieveChecksum(fileName);
+                //          JSONObject licenseAndPath = RetrieveLicense (checksum);
+                //          Add JSONObject to detectedLicenses (that then will be consumed by the feeder
+                //      if element is a directory:
+                //          RepeatThisLoop();
+                //
 
 
-            logger.info("Analysis for " + + packageName + " version: "+ packageVersion +" completed.");
+            logger.info("Analysis for " + packageName + " version: "+ packageVersion +" completed.");
 
             return retrieveLicensesInformationForFiles;
         }
