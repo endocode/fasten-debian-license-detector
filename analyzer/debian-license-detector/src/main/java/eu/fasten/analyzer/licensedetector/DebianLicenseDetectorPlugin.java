@@ -129,8 +129,14 @@ public class LicenseDetectorPlugin extends Plugin {
         protected Set<DetectedLicense> getDebianOutboundLicenses(String packageName, String packageVersion, String repoUrl) {
 
             try {
-                // Retrieving the outbound license(s) from the copyright file
-                return retrieveCopyrightFile(packageName,packageVersion);
+                // Retrieving the outbound license(s) from one of the copyright files (copyright, license or readme)
+                // TODO passing also the path as SOURCE
+                JSONObject FileAndPath = retrieveCopyrightFile(packageName,packageVersion)
+                if (FileAndPath.getString("license")!= null){
+                    String license = FileAndPath.getString("license");
+                    return license;
+                }
+
 
             } catch (FileNotFoundException | RuntimeException | XmlPullParserException e) {
 
@@ -160,6 +166,7 @@ public class LicenseDetectorPlugin extends Plugin {
             return Collections.emptySet();
         }
 
+        // TODO
         /**
          * Retrieves the licenses declared in the files: `copyright`, `license`, `readme` .
          *
@@ -353,70 +360,83 @@ public class LicenseDetectorPlugin extends Plugin {
          * @param packageName the package name to be analyzed.
          * @param packageVersion the package version to be analyzed.
          */
-        protected String retrieveCopyrightFile(String packageName, String packageVersion) {
-          URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/");
-        HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-        conn.setRequestMethod("GET");
-        conn.setRequestProperty("Accept", "application/json");
-        if (conn.getResponseCode() != 200) {
-            throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
-        }
-        InputStreamReader in = new InputStreamReader(conn.getInputStream());
-        BufferedReader br = new BufferedReader(in);
-        String jsonOutput = br.lines().collect(Collectors.joining());
-        // searching for the copyright files in the JSON response
-        var jsonOutputPayload = new JSONObject(jsonOutput);
-        if (jsonOutputPayload.has("content")) {
-            JSONArray array2 = jsonOutputPayload.getJSONArray("content");
-            //Getting json objects inside array
-            for (int i = 0; i < array2.length(); i++) {
-                JSONObject obj4 = array2.getJSONObject(i);
-                //Getting name and type of json objects inside array2
-                String name = obj4.getString("name");
-                String type = obj4.getString("type");
-                String copyright = "copyright";
-                String licenseStr = "license";
-                String readme = "readme";
-                System.out.println("The file name is : " + obj4.getString("name") + " Type of obj4 at index " + i + " is : " + obj4.getString("type"));
-                //Converting both the strings to lower case for case insensitive checking
-                if (name.toLowerCase().contains(copyright)) {
-                    String checksum = RetrieveChecksum(name, packageName, packageVersion);
-                    if (checksum != null) {
-                        // the following String should be modified in a JSONObject, and then parsing the license key
-                        String license = RetrieveLicense(checksum, packageName, packageVersion);
-                        System.out.println("The license retrieved is: "+license);
-                        if (license != null) {
-                            break;
-                        }
-                    }
-                }
-                if (name.toLowerCase().contains(licenseStr)) {
-                    String checksum = RetrieveChecksum(name, packageName, packageVersion);
-                    if (checksum != null) {
-                        String license = RetrieveLicense(checksum, packageName, packageVersion);
-                        System.out.println("The license retrieved is: "+license);
-                        if (license != null) {
-                            break;
-                        }
-                    }
-                }
-                if (name.toLowerCase().contains(readme)) {
-                    String checksum = RetrieveChecksum(name, packageName, packageVersion);
-                    if (checksum != null) {
-                        String license = RetrieveLicense(checksum, packageName, packageVersion);
-                        System.out.println("The license retrieved is: "+license);
-                        if (license != null) {
-                            break;
-                        }
-                    }
-                }
-                //System.out.println(name.toLowerCase().contains(license));
-                //System.out.println(name.toLowerCase().contains(readme));
+        protected JSONObject retrieveCopyrightFile(String packageName, String packageVersion) {
+            URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/");
+            JSONObject LicenseAndPath = new JSONObject();
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            if (conn.getResponseCode() != 200) {
+                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
             }
-        } else {
-            System.out.println(" No contents key in this JSON");
+            InputStreamReader in = new InputStreamReader(conn.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String jsonOutput = br.lines().collect(Collectors.joining());
+            // searching for the copyright files in the JSON response
+            var jsonOutputPayload = new JSONObject(jsonOutput);
+            if (jsonOutputPayload.has("content")) {
+                JSONArray array2 = jsonOutputPayload.getJSONArray("content");
+                //Getting json objects inside array
+                for (int i = 0; i < array2.length(); i++) {
+                    JSONObject obj4 = array2.getJSONObject(i);
+                    //Getting name and type of json objects inside array2
+                    String name = obj4.getString("name");
+                    String type = obj4.getString("type");
+                    String copyright = "copyright";
+                    String licenseStr = "license";
+                    String readme = "readme";
+                    String license = null;
+                    System.out.println("The file name is : " + obj4.getString("name") + " Type of obj4 at index " + i + " is : " + obj4.getString("type"));
+                    //Converting both the strings to lower case for case insensitive checking
+                    if (name.toLowerCase().contains(copyright)) {
+                        String checksum = RetrieveChecksum(name, packageName, packageVersion);
+                        if (checksum != null) {
+                            // the following String should be modified in a JSONObject, and then parsing the license key
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            if (LicenseAndPath.getString("license")!= null){
+                                license = LicenseAndPath.getString("license");
+                            }
+                            if (license != null) {
+                                System.out.println("The license retrieved is: "+license);
+                                return LicenseAndPath;
+                            }
+                        }
+                    }
+                    if (name.toLowerCase().contains(licenseStr)) {
+                        String checksum = RetrieveChecksum(name, packageName, packageVersion);
+                        if (checksum != null) {
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            if (LicenseAndPath.getString("license")!= null){
+                                license = LicenseAndPath.getString("license");
+                            }
+                            if (license != null) {
+                                System.out.println("The license retrieved is: "+license);
+                                return LicenseAndPath;
+                            }
+                        }
+                    }
+                    if (name.toLowerCase().contains(readme)) {
+                        String checksum = RetrieveChecksum(name, packageName, packageVersion);
+                        if (checksum != null) {
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            if (LicenseAndPath.getString("license") != null) {
+                                license = LicenseAndPath.getString("license");
+                            }
+                            if (license != null) {
+                                System.out.println("The license retrieved is: " + license);
+                                return LicenseAndPath;
+                            }
+                        }
+                    }
+                    //System.out.println(name.toLowerCase().contains(license));
+                    //System.out.println(name.toLowerCase().contains(readme));
+                }
+            } else {
+                System.out.println(" No contents key in this JSON");
+                return licenseAndFilePath;
+            }
         }
-        }
+
         // retrieve checksum for a given file
         protected String RetrieveChecksum(String fileName, String packageName, String packageVersion) throws IOException {
             URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/" + "/" + fileName + "/");
@@ -438,8 +458,8 @@ public class LicenseDetectorPlugin extends Plugin {
             return checksum;
         }
 
-        // return a JSONObject with license and filePath of a given checksum
-        protected JSONObject RetrieveLicense(String checksum, String packageName, String packageVersion) throws IOException {
+        // return a JSONObject with license and filePath of a given checksum: tested and it seems ok.
+        protected JSONObject RetrieveLicenseAndPath(String checksum, String packageName, String packageVersion) throws IOException {
             URL url = new URL("https://sources.debian.org/copyright/api/sha256/?checksum=" + checksum + "&package=" + packageName);
             String license = null;
             String filePath = null;
@@ -475,22 +495,19 @@ public class LicenseDetectorPlugin extends Plugin {
             return licenseAndFilePath;
         }
         /**
-         * Scans a repository looking for license text in files with scancode.
+         * Analyze a Debian repository looking for license at the file level.
          *
-         * @param repoPath the repository path whose pom.xml file must be retrieved.
-         * @return the URL where the license retrievel at the file level started.
-         * @throws IOException          in case scancode couldn't start.
-         * @throws InterruptedException in case this function couldn't wait for scancode to complete.
-         * @throws RuntimeException     in case scancode returns with an error code != 0.
+         * @param packageName the package name to be analyzed.
+         * @param packageVersion the package version to be analyzed.
+         * @return the URL where the license retrieval at the file level started.
+         * @throws InterruptedException in case this function couldn't wait for the analysis to complete.
+         * @throws RuntimeException     in case the URL of the package name and version doesn't exist.
          */
-        protected String analyzeProject(String packageName, String packageVersion) throws IOException, InterruptedException, RuntimeException {
-
+        protected String analyzeProject(String packageName, String packageVersion) throws InterruptedException, RuntimeException {
+            JSONArray DetectedFileLicenses = new JSONArray();
             // Where is the result stored
-            String retrieveLicensesInformationForFiles = //JSON name
+            String retrieveLicensesInformationForFiles = null; //JSON name
                     // TODO
-
-
-
             // Start analyzing
             logger.info("Retrieving license information at the file level for: " + packageName + "; version: "+ packageVersion +" .");
             URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/");
@@ -505,25 +522,116 @@ public class LicenseDetectorPlugin extends Plugin {
             String jsonOutput = br.lines().collect(Collectors.joining());
             // searching for the copyright files in the JSON response
             var jsonOutputPayload = new JSONObject(jsonOutput);
-            if (jsonOutputPayload.has("content")) {
-                JSONArray array2 = jsonOutputPayload.getJSONArray("content");
-                // TODO implement recursivity for checksum retrieval,
-                //  after that, the creation of a JSON object that stores at least
-                // file path and license retrieved
-                // ###### HERE SOMETHING LIKE:##########
-                // for all the elements in content:
-                //      if element is file:
-                //          RetrieveChecksum(fileName);
-                //          JSONObject licenseAndPath = RetrieveLicense (checksum);
-                //          Add JSONObject to detectedLicenses (that then will be consumed by the feeder
-                //      if element is a directory:
-                //          RepeatThisLoop();
-                //
 
+            JSONArray JSONFilesLicenses = AnalyzeDirectory(jsonOutputPayload, packageName, packageVersion);
+            System.out.print(JSONFilesLicenses);
 
             logger.info("Analysis for " + packageName + " version: "+ packageVersion +" completed.");
 
             return retrieveLicensesInformationForFiles;
+        }
+
+        // Loop through files and insert path and license into a JSONArray
+        protected JSONArray LoopThroughFiles(JSONArray JSONFiles) throws IOException {
+            JSONArray LicenseAndPathFiles = new JSONArray();
+            for (int j = 0; j < JSONFiles.length(); j++) {
+                JSONObject obj = JSONFiles.getJSONObject(j);
+                System.out.println(obj);
+                if (obj.has("path")){
+                    String checksum = RetrieveChecksumWithPath(obj.getString("path"));
+                    System.out.println(checksum);
+                    if (checksum != null) {
+                        JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, obj.getString("packageName"), obj.getString("packageVersion"));
+                        System.out.println(LicenseAndPath);
+                        LicenseAndPathFiles.put(LicenseAndPath);
+                        //DetectedFileLicenses.put(LicenseAndPath.valueToString());
+                    }
+                }
+            }
+            return LicenseAndPathFiles;
+        }
+
+        protected JSONObject GetDirectoryJSON(String path) throws InterruptedException, RuntimeException, IOException {
+            JSONObject JSONDirectory = new JSONObject();
+            URL url = new URL("https://sources.debian.org/api/src/"+path+"/");
+            System.out.println(url);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            if (conn.getResponseCode() != 200) {
+                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
+            }
+            InputStreamReader in = new InputStreamReader(conn.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String jsonOutput = br.lines().collect(Collectors.joining());
+            // searching for the copyright files in the JSON response
+            JSONDirectory = new JSONObject(jsonOutput);
+            return JSONDirectory;
+        }
+
+        protected JSONArray AnalyzeDirectory(JSONObject JSONDirectoryPayload, String packageName, String packageVersion) throws IOException, InterruptedException, TimeoutException {
+            JSONArray JSONFilesLicenses = new JSONArray();
+            if (JSONDirectoryPayload.has("content")) {
+                JSONArray array = JSONDirectoryPayload.getJSONArray("content");
+                //System.out.println(array);
+                JSONArray JSONFiles = new JSONArray();
+                for (int i = 0; i < array.length(); i++) {
+                    JSONObject obj = array.getJSONObject(i);
+                    //Getting name and type of json objects inside array2
+                    String name = obj.getString("name");
+                    String type = obj.getString("type");
+                    String FilePath = JSONDirectoryPayload.getString("path");
+                    //System.out.println(FilePath);
+                    if (type.equals("file")) {
+                        FilePath = FilePath+"/"+name;
+                        obj.put("path",FilePath);
+                        obj.put("packageName",packageName);
+                        obj.put("packageVersion",packageVersion);
+                        //System.out.println(obj);
+                        JSONFiles.put(obj);
+                    }
+                }
+                System.out.println(JSONFiles);
+                JSONFilesLicenses.put(LoopThroughFiles(JSONFiles));
+                System.out.print(JSONFilesLicenses);
+                // to add the JSONObject to DetectedLicenses
+
+                for (int j = 0; j < array.length(); j++) {
+                    JSONObject obj2 = array.getJSONObject(j);
+                    //Getting name and type of json objects inside array2
+                    String nameDir = obj2.getString("name");
+                    String typeDir = obj2.getString("type");
+                    String path = JSONDirectoryPayload.getString("path");
+                    if (typeDir.equals("directory")){
+                        path = path +"/"+nameDir;
+                        System.out.println(path);
+                        JSONObject JSONDirectory = GetDirectoryJSON(path);
+                        JSONFilesLicenses.put(AnalyzeDirectory(JSONDirectory,packageName,packageVersion));
+                        System.out.println(JSONDirectory);
+                    }
+                }
+            }
+            return JSONFilesLicenses;
+        }
+
+        private static String RetrieveChecksumWithPath(String path) throws IOException {
+            URL url = new URL("https://sources.debian.org/api/src/" +path + "/");
+            String checksum = null;
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            if (conn.getResponseCode() != 200) {
+                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
+            }
+            InputStreamReader in = new InputStreamReader(conn.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String jsonOutput = br.lines().collect(Collectors.joining());
+
+            var jsonOutputPayload = new JSONObject(jsonOutput);
+            if (jsonOutputPayload.has("checksum")) {
+                checksum = jsonOutputPayload.getString("checksum");
+            }
+            return checksum;
         }
 
         /**
