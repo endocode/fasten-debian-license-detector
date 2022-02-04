@@ -39,6 +39,16 @@ public class LicenseDetectorPlugin extends Plugin {
 
     @Extension
     public static class DebianLicenseDetector implements KafkaPlugin {
+        private static String packageVersion = "latest";
+        private static String packageName ;
+        private static int HttpGetCount = 0;
+        private static int FilesCount=0;
+        private static int FilesWithLicensesCount=0;
+        private static int LoopAlarm = 0;
+        private static int NumberOfFilesWithDoubleEntries = 0;
+        private static File file;
+        private static String FileDoubleEntered = null;
+        private static String CurrentPathAndFilename = null;
 
         private final Logger logger = LoggerFactory.getLogger(DebianLicenseDetector.class.getName());
 
@@ -47,7 +57,7 @@ public class LicenseDetectorPlugin extends Plugin {
         /**
          * The topic this plugin consumes.
          */
-        protected String consumerTopic = "fasten.SyncC.out";
+        protected String consumerTopic = "fasten.MetadataDBCExtension.out";
 
         /**
          * TODO
@@ -298,6 +308,9 @@ public class LicenseDetectorPlugin extends Plugin {
         }
 
         /**
+         * ############################ TODO ########################
+         *                  Here the input topic changed.
+         *                  Integrate Magiel suggested code.
          * Retrieves the package version of the input record.
          *
          * @param record the input record containing the package version information.
@@ -320,6 +333,9 @@ public class LicenseDetectorPlugin extends Plugin {
         }
 
         /**
+         * #################### TODO #####################
+         *          ....same as above...
+         *
          * Retrieves the package name of the input record.
          *
          * @param record the input record containing package information.
@@ -337,7 +353,8 @@ public class LicenseDetectorPlugin extends Plugin {
         }
 
         /**
-         * Retrieves the repository URL from the input record.
+         * * #################### TODO #####################
+         *          ....same as above...
          *
          * @param record the input record containing repository information.
          * @return the input repository URL.
@@ -354,6 +371,8 @@ public class LicenseDetectorPlugin extends Plugin {
             return payload.getString("repoUrl");
         }
 
+
+        // this method was calling the previous version of RetrieveLicenseAndPath, TODO check if with RetrieveLicenseAndPathJSON all it is functioning
         /**
          * Retrieves the copyright file given a package name and the package version path.
          *
@@ -392,7 +411,7 @@ public class LicenseDetectorPlugin extends Plugin {
                         String checksum = RetrieveChecksum(name, packageName, packageVersion);
                         if (checksum != null) {
                             // the following String should be modified in a JSONObject, and then parsing the license key
-                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPathJSON(checksum, packageName, packageVersion);
                             if (LicenseAndPath.getString("license")!= null){
                                 license = LicenseAndPath.getString("license");
                             }
@@ -405,7 +424,7 @@ public class LicenseDetectorPlugin extends Plugin {
                     if (name.toLowerCase().contains(licenseStr)) {
                         String checksum = RetrieveChecksum(name, packageName, packageVersion);
                         if (checksum != null) {
-                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPathJSON(checksum, packageName, packageVersion);
                             if (LicenseAndPath.getString("license")!= null){
                                 license = LicenseAndPath.getString("license");
                             }
@@ -418,7 +437,7 @@ public class LicenseDetectorPlugin extends Plugin {
                     if (name.toLowerCase().contains(readme)) {
                         String checksum = RetrieveChecksum(name, packageName, packageVersion);
                         if (checksum != null) {
-                            JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, packageName, packageVersion);
+                            JSONObject LicenseAndPath = RetrieveLicenseAndPathJSON(checksum, packageName, packageVersion);
                             if (LicenseAndPath.getString("license") != null) {
                                 license = LicenseAndPath.getString("license");
                             }
@@ -428,8 +447,6 @@ public class LicenseDetectorPlugin extends Plugin {
                             }
                         }
                     }
-                    //System.out.println(name.toLowerCase().contains(license));
-                    //System.out.println(name.toLowerCase().contains(readme));
                 }
             } else {
                 System.out.println(" No contents key in this JSON");
@@ -458,7 +475,45 @@ public class LicenseDetectorPlugin extends Plugin {
             return checksum;
         }
 
-        // return a JSONObject with license and filePath of a given checksum: tested and it seems ok.
+        // This is going to substitute the previous function called: RetrieveChecksum
+        protected String RetrieveChecksumWithPath(String path) throws IOException, TimeoutException, InterruptedException {
+            String checksum = null;
+            var jsonOutputPayload = new JSONObject();
+            try {
+                jsonOutputPayload = GetDirectoryOrFileJSON(path);
+                if (jsonOutputPayload != null){
+                    if (jsonOutputPayload.has("checksum")) {
+                        checksum = jsonOutputPayload.getString("checksum");
+                    }
+                }
+            } catch (IOException e) {
+                throw new IOException(
+                        "Couldn't get data from the HTTP response returned by Debian's API using the checksum: " + e.getMessage(),
+                        e.getCause());
+            }
+            return checksum;
+        }
+
+        // this method retrieves a JSON given a checksum and a packageName. This is used by the RetrieveLicenseAndPath method.
+        protected JSONObject RetrieveLicenseAndPathJSON(String checksum, String packageName, String packageVersion) throws IOException, TimeoutException, RuntimeException {
+            URL url = new URL("https://sources.debian.org/copyright/api/sha256/?checksum=" + checksum + "&package=" + packageName);
+            System.out.println(url);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setConnectTimeout(5000);  //set timeout to 5 seconds
+            if (conn.getResponseCode() != 200) {
+                return null;
+            }
+            HttpGetCount += 1;
+            InputStreamReader in = new InputStreamReader(conn.getInputStream());
+            BufferedReader br = new BufferedReader(in);
+            String jsonOutput = br.lines().collect(Collectors.joining());
+            var jsonOutputPayload = new JSONObject(jsonOutput);
+            return jsonOutputPayload;
+        }
+
+        // return a JSONObject with license and path. This method is invoked right after RetrieveLicenseAndPathJSON().
         protected JSONObject RetrieveLicenseAndPath(String checksum, String packageName, String packageVersion) throws IOException {
             URL url = new URL("https://sources.debian.org/copyright/api/sha256/?checksum=" + checksum + "&package=" + packageName);
             String license = null;
@@ -494,176 +549,190 @@ public class LicenseDetectorPlugin extends Plugin {
             }
             return licenseAndFilePath;
         }
-        /**
-         * Analyze a Debian repository looking for license at the file level.
-         *
-         * @param packageName the package name to be analyzed.
-         * @param packageVersion the package version to be analyzed.
-         * @return the URL where the license retrieval at the file level started.
-         * @throws InterruptedException in case this function couldn't wait for the analysis to complete.
-         * @throws RuntimeException     in case the URL of the package name and version doesn't exist.
-         */
-        protected String analyzeProject(String packageName, String packageVersion) throws InterruptedException, RuntimeException {
-            JSONArray DetectedFileLicenses = new JSONArray();
-            // Where is the result stored
-            String retrieveLicensesInformationForFiles = null; //JSON name
-                    // TODO
-            // Start analyzing
-            logger.info("Retrieving license information at the file level for: " + packageName + "; version: "+ packageVersion +" .");
-            URL url = new URL("https://sources.debian.org/api/src/" + packageName + "/" + packageVersion + "/");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "application/json");
-            if (conn.getResponseCode() != 200) {
-                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
+
+        // this method write to a JSONFile .
+        protected void WriteToJSON(JSONArray JSONArrayWithFileInfo) throws IOException {
+            try (BufferedWriter bw = Files.newBufferedWriter(Paths.get(String.valueOf(file)), StandardOpenOption.APPEND)) {
+                bw.append(String.valueOf(JSONArrayWithFileInfo));
+                bw.append("\n");
+                bw.flush();
+            } catch (Exception ex) {
+                System.err.println("Couldn't write Licenses \n"
+                        + ex.getMessage());
             }
-            InputStreamReader in = new InputStreamReader(conn.getInputStream());
-            BufferedReader br = new BufferedReader(in);
-            String jsonOutput = br.lines().collect(Collectors.joining());
-            // searching for the copyright files in the JSON response
-            var jsonOutputPayload = new JSONObject(jsonOutput);
-
-            JSONArray JSONFilesLicenses = AnalyzeDirectory(jsonOutputPayload, packageName, packageVersion);
-            System.out.print(JSONFilesLicenses);
-
-            logger.info("Analysis for " + packageName + " version: "+ packageVersion +" completed.");
-
-            return retrieveLicensesInformationForFiles;
         }
 
-        // Loop through files and insert path and license into a JSONArray
-        protected JSONArray LoopThroughFiles(JSONArray JSONFiles) throws IOException {
-            JSONArray LicenseAndPathFiles = new JSONArray();
-            for (int j = 0; j < JSONFiles.length(); j++) {
-                JSONObject obj = JSONFiles.getJSONObject(j);
-                System.out.println(obj);
-                if (obj.has("path")){
-                    String checksum = RetrieveChecksumWithPath(obj.getString("path"));
-                    System.out.println(checksum);
-                    if (checksum != null) {
-                        JSONObject LicenseAndPath = RetrieveLicenseAndPath(checksum, obj.getString("packageName"), obj.getString("packageVersion"));
-                        System.out.println(LicenseAndPath);
-                        LicenseAndPathFiles.put(LicenseAndPath);
-                        //DetectedFileLicenses.put(LicenseAndPath.valueToString());
-                    }
-                }
-            }
-            return LicenseAndPathFiles;
-        }
-
-        protected JSONObject GetDirectoryJSON(String path) throws InterruptedException, RuntimeException, IOException {
-            JSONObject JSONDirectory = new JSONObject();
-            URL url = new URL("https://sources.debian.org/api/src/"+path+"/");
+        // this method retrieves the json file given a path
+        protected JSONObject GetDirectoryOrFileJSON(String path) throws InterruptedException, RuntimeException, IOException, TimeoutException, SocketTimeoutException {
+            JSONObject JSONDirectoryOrFile = new JSONObject();
+            URL url = new URL("https://sources.debian.org/api/src/" + path + "/");
             System.out.println(url);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "application/json");
-            if (conn.getResponseCode() != 200) {
-                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
+            conn.setConnectTimeout(5000);  //set timeout to 5 seconds
+            if (conn.getResponseCode() == 200) {
+                HttpGetCount += 1;
+                InputStreamReader in = new InputStreamReader(conn.getInputStream());
+                BufferedReader br = new BufferedReader(in);
+                String jsonOutput = br.lines().collect(Collectors.joining());
+                // searching for the copyright files in the JSON response
+                JSONDirectoryOrFile = new JSONObject(jsonOutput);
+                return JSONDirectoryOrFile;
             }
-            InputStreamReader in = new InputStreamReader(conn.getInputStream());
-            BufferedReader br = new BufferedReader(in);
-            String jsonOutput = br.lines().collect(Collectors.joining());
-            // searching for the copyright files in the JSON response
-            JSONDirectory = new JSONObject(jsonOutput);
-            return JSONDirectory;
-        }
-
-        protected JSONArray AnalyzeDirectory(JSONObject JSONDirectoryPayload, String packageName, String packageVersion) throws IOException, InterruptedException, TimeoutException {
-            JSONArray JSONFilesLicenses = new JSONArray();
-            if (JSONDirectoryPayload.has("content")) {
-                JSONArray array = JSONDirectoryPayload.getJSONArray("content");
-                //System.out.println(array);
-                JSONArray JSONFiles = new JSONArray();
-                for (int i = 0; i < array.length(); i++) {
-                    JSONObject obj = array.getJSONObject(i);
-                    //Getting name and type of json objects inside array2
-                    String name = obj.getString("name");
-                    String type = obj.getString("type");
-                    String FilePath = JSONDirectoryPayload.getString("path");
-                    //System.out.println(FilePath);
-                    if (type.equals("file")) {
-                        FilePath = FilePath+"/"+name;
-                        obj.put("path",FilePath);
-                        obj.put("packageName",packageName);
-                        obj.put("packageVersion",packageVersion);
-                        //System.out.println(obj);
-                        JSONFiles.put(obj);
-                    }
-                }
-                System.out.println(JSONFiles);
-                JSONFilesLicenses.put(LoopThroughFiles(JSONFiles));
-                System.out.print(JSONFilesLicenses);
-                // to add the JSONObject to DetectedLicenses
-
-                for (int j = 0; j < array.length(); j++) {
-                    JSONObject obj2 = array.getJSONObject(j);
-                    //Getting name and type of json objects inside array2
-                    String nameDir = obj2.getString("name");
-                    String typeDir = obj2.getString("type");
-                    String path = JSONDirectoryPayload.getString("path");
-                    if (typeDir.equals("directory")){
-                        path = path +"/"+nameDir;
-                        System.out.println(path);
-                        JSONObject JSONDirectory = GetDirectoryJSON(path);
-                        JSONFilesLicenses.put(AnalyzeDirectory(JSONDirectory,packageName,packageVersion));
-                        System.out.println(JSONDirectory);
-                    }
-                }
-            }
-            return JSONFilesLicenses;
-        }
-
-        private static String RetrieveChecksumWithPath(String path) throws IOException {
-            URL url = new URL("https://sources.debian.org/api/src/" +path + "/");
-            String checksum = null;
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod("GET");
-            conn.setRequestProperty("Accept", "application/json");
-            if (conn.getResponseCode() != 200) {
-                throw new RuntimeException("HTTP query failed. Error code: " + conn.getResponseCode());
-            }
-            InputStreamReader in = new InputStreamReader(conn.getInputStream());
-            BufferedReader br = new BufferedReader(in);
-            String jsonOutput = br.lines().collect(Collectors.joining());
-
-            var jsonOutputPayload = new JSONObject(jsonOutput);
-            if (jsonOutputPayload.has("checksum")) {
-                checksum = jsonOutputPayload.getString("checksum");
-            }
-            return checksum;
-        }
-
-        /**
-         * Parses the scan result file and returns file licenses.
-         *
-         * @param scanResultPath the path of the file containing the scan results.
-         * @return the list of licenses that have been detected by scanning files.
-         * @throws IOException   in case the JSON scan result couldn't be read.
-         * @throws JSONException in case the root object of the JSON scan result couldn't have been retrieved.
-         */
-        protected JSONArray parseScanResult(String scanResultPath) throws IOException, JSONException {
-
-            try {
-                // Retrieving the root element of the scan result file
-                JSONObject root = new JSONObject(Files.readString(Paths.get(scanResultPath)));
-                if (root.isEmpty()) {
-                    throw new JSONException("Couldn't retrieve the root object of the JSON scan result file " +
-                            "at " + scanResultPath + ".");
-                }
-
-                // Returning file licenses
-                if (root.has("files") && !root.isNull("files")) {
-                    return root.getJSONArray("files");
-                }
-            } catch (IOException e) {
-                throw new IOException("Couldn't read the JSON scan result file at " + scanResultPath +
-                        ": " + e.getMessage(), e.getCause());
-            }
-
-            // In case nothing could have been found
             return null;
         }
+
+        // this method recursively call itself, to parse the json given
+        protected void AnalyzeDirectory(JSONObject JSONDirectoryPayload, String packageName, String packageVersion) throws IOException, InterruptedException, TimeoutException {
+            if (NumberOfFilesWithDoubleEntries < 25) {
+                JSONArray JSONFilesLicenses = new JSONArray();
+                if (JSONDirectoryPayload.has("content")) {
+                    JSONArray array = JSONDirectoryPayload.getJSONArray("content");
+                    JSONArray JSONFiles = new JSONArray();
+                    // this loop analyzes files in the current directory.
+                    for (int i = 0; i < array.length(); i++) {
+                        JSONObject obj = array.getJSONObject(i);
+                        String name = obj.getString("name");
+                        String type = obj.getString("type");
+                        String FilePath = JSONDirectoryPayload.getString("path");
+                        if (type.equals("file")) {
+                            FilePath = FilePath + "/" + name;
+                            obj.put("path", FilePath);
+                            obj.put("packageName", packageName);
+                            obj.put("packageVersion", packageVersion);
+                            JSONFiles.put(obj);
+                        }
+                    }
+
+                    if (JSONFiles.length() > 0) {
+                        System.out.println("JSONFiles :"+JSONFiles);
+                        LoopThroughFiles(JSONFiles);
+                    }
+                    // this loop analyzes directories in the current directory; when a dir is found recursively the
+                    // AnalyzeDirectory function is triggered.
+                    for (int j = 0; j < array.length(); j++) {
+                        JSONObject obj2 = array.getJSONObject(j);
+                        String nameDir = obj2.getString("name");
+                        String typeDir = obj2.getString("type");
+                        String DirectoryPath = JSONDirectoryPayload.getString("path");
+                        if (typeDir.equals("directory")) {
+                            DirectoryPath = DirectoryPath + "/" + nameDir;
+                            System.out.println("DirectoryPath is: "+DirectoryPath);
+                            JSONObject JSONDirectory = GetDirectoryOrFileJSON(DirectoryPath);
+                            if (JSONDirectory != null){
+                                AnalyzeDirectory(JSONDirectory, packageName, packageVersion);
+                            }
+                        }
+                    }
+                }
+            }
+            else{
+                System.out.println("Too many files with a double entry");
+            }
+        }
+
+        // this method is used to measure the time elapsed for scanning a given package
+        protected void MeasureElapsedTime() {
+            try {
+                TimeUnit.SECONDS.sleep(3);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // this method convert from milliseconds to minutes and seconds.
+        protected String ConvertMsToMins(long milliseconds) {
+
+            // formula for conversion for
+            // milliseconds to minutes.
+            long minutes = (milliseconds / 1000) / 60;
+
+            // formula for conversion for
+            // milliseconds to seconds
+            long seconds = (milliseconds / 1000) % 60;
+
+            // Print the output
+            String output = minutes + " minutes and "
+                    + seconds + " seconds.";
+            return output;
+        }
+
+        // this method looks for dubplicate files, trying to prevent loops.
+        protected boolean SearchPathInJsonFile(String jsonFile, String path){
+            try{
+                BufferedReader br = new BufferedReader(new FileReader(jsonFile));
+                String next = null;
+                LoopAlarm = 0;
+                while ((next = br.readLine()) != null) {
+                    JSONArray jsonArr = new JSONArray(next);
+                    for (int i = 0; i < jsonArr.length(); i++) {
+                        //jsonArr[i].getString("path");
+                        //System.out.println(jsonArr.getString(i));
+                        //String arr= jsonArr(i);
+                        JSONObject explrObject = jsonArr.getJSONObject(i);
+                        String path2 = explrObject.getString("path");
+                        //double-check this loop
+                        if (path2.equals(path)) {
+                            LoopAlarm++;
+                        }
+                    }
+                }
+                if (LoopAlarm >= 2){
+                    System.out.println("LoopAlarm = "+LoopAlarm);
+                    System.out.println(path);
+                    return false;
+                }
+            } catch (FileNotFoundException e) {
+                e.printStackTrace();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            return true;
+        }
+
+        // Loop through files and insert path and license into a JSONArray
+        protected JSONArray LoopThroughFiles(JSONArray JSONFiles) throws IOException, TimeoutException, InterruptedException {
+            JSONArray LicenseAndPathFiles = new JSONArray();
+            //JSONObject LicenseAndPathJSON = null;// = new JSONObject();
+            String checksum = null;
+            System.out.println(JSONFiles);
+            for (int j = 0; j < JSONFiles.length(); j++) {
+                JSONObject obj = JSONFiles.getJSONObject(j);
+                if (obj.has("path")) {
+                    CurrentPathAndFilename = obj.getString("path");
+                    CurrentPathAndFilename = CurrentPathAndFilename.replace(packageName+"/","");
+                    CurrentPathAndFilename = CurrentPathAndFilename.replace(packageVersion+"/","");
+                    System.out.println(obj.getString("path"));
+                    checksum = RetrieveChecksumWithPath(obj.getString("path"));
+                }
+                if (checksum != null) {
+                    JSONObject LicenseAndPathJSON = RetrieveLicenseAndPathJSON(checksum, obj.getString("packageName"), obj.getString("packageVersion"));
+                    if (LicenseAndPathJSON != null) {
+                        JSONObject LicenseAndPath = RetrieveLicenseAndPath(LicenseAndPathJSON);
+                        if (LicenseAndPath.length()>0) {
+                            LicenseAndPathFiles.put(LicenseAndPath);
+                        }
+                    }
+                }
+            }
+            if (LicenseAndPathFiles.length() > 0) {
+                WriteToJSON(LicenseAndPathFiles);
+                for (int i = 0; i < LicenseAndPathFiles.length(); i++) {
+                    JSONObject explrObject = LicenseAndPathFiles.getJSONObject(i);
+                    String path = explrObject.getString("path");
+                    String jsonFile = file.getName();
+                    System.out.println("jsonFile :"+jsonFile);
+                    boolean DoubleEntries = SearchPathInJsonFile("logs/"+jsonFile, path);
+                    if (!DoubleEntries){
+                        NumberOfFilesWithDoubleEntries++;
+                        FileDoubleEntered = path;
+                        //pathIndex++;
+                    }
+                }
+            }
+        }
+
 
         @Override
         public Optional<String> produce() {
