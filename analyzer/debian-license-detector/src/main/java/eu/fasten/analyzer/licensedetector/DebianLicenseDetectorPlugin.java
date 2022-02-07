@@ -85,45 +85,72 @@ public class LicenseDetectorPlugin extends Plugin {
         @Override
         public void consume(String record) {
             try { // Fasten error-handling guidelines
-
                 reset();
-
+                JSONObject json = new JSONObject(record);
                 logger.info("Debian license detector started.");
-                // Retrieving the repo URL
-                String repoUrl = extractRepoURL(record);
+
                 // Retrieving the package name
-                String packageName = extractPackageName(record);
+                String packageName = extractPackageName(json);
                 logger.info("The package to analyze is:"+packageName+".");
                 // Retrieving the package version
-                String packageVersion = extractPackageVersion(record);
+                String packageVersion = extractPackageVersion(json);
                 logger.info("The package version is:"+packageVersion+".");
-                // Debian outbound license detection
-                detectedLicenses.setOutbound(getDebianOutboundLicenses(packageName, packageVersion, repoUrl));
-                if (detectedLicenses.getOutbound() == null || detectedLicenses.getOutbound().isEmpty()) {
-                    logger.warn("No Debian outbound licenses were detected.");
+
+                // these logs should be saved in some shared directory, and a policy of log deletion should be implemented
+                String directoryName = "logs";
+                File directory = new File(directoryName);
+                if (!directory.exists()) {
+                    directory.mkdir();
+                }
+                FileHandler fh;
+                String timeStamp = new SimpleDateFormat("yyyy.MM.dd.HH.mm.ss").format(new Date());
+                // This block configures the logger with handler and formatter
+                fh = new FileHandler("logs/D4.2" + timeStamp + ".log");
+                logger.addHandler(fh);
+                SimpleFormatter formatter = new SimpleFormatter();
+                fh.setFormatter(formatter);
+
+                long startTime = System.currentTimeMillis();
+                MeasureElapsedTime();
+                String path = packageName + "/" + packageVersion;
+                var jsonOutputPayload = new JSONObject();
+                jsonOutputPayload = GetDirectoryOrFileJSON(path);
+                System.out.println(jsonOutputPayload);
+                if (jsonOutputPayload == null) {
+                    logger.info("Analyzed: " + packageName + " version : " + packageVersion);
+                    logger.info("The package is not present on the Debian repository.");
                 } else {
-                    logger.info(
-                            detectedLicenses.getOutbound().size() + " outbound license" +
-                                    (detectedLicenses.getOutbound().size() == 1 ? "" : "s") + " detected: " +
-                                    detectedLicenses.getOutbound()
+                    packageVersion = jsonOutputPayload.getString("version");
+                    file = new File("logs/" + packageName + "-" + packageVersion + "_LicensesAtFileLevel_ld.json");
+                    Files.deleteIfExists(file.toPath());
+                    file.createNewFile();
+                    logger.info(file + " created.");
+                    logger.info("Analyzing: " + packageName + " version : " + packageVersion);
+                    AnalyzeDirectory(jsonOutputPayload, packageName, packageVersion);
+                }
+
+                long endTime = System.currentTimeMillis();
+                long duration = (endTime - startTime);  //Total execution time in milliseconds
+
+
+                logger.info("Analysis completed successfully\n " +
+                        "During this analysis " + HttpGetCount + " HTTP requests have been performed.\n" +
+                        "During this analysis " + FilesCount + " files have been found.\n" +
+                        "During this analysis " + FilesWithLicensesCount + " files with licenses have been found.\n" +
+                        "The analysis took:" + ConvertMsToMins(duration) + ".\n"
+                );
+                if (NumberOfFilesWithDoubleEntries > 0) {
+                    logger.info("The number of files with detected double entries are: " + NumberOfFilesWithDoubleEntries + ".\n" +
+                            "The five files detected with a double entry are :" + FileDoubleEntered + ".\n"
                     );
                 }
-
-                // FROM HERE TO COMPLETELY REVIEW
-                // Detecting inbound licenses by scanning the project
-                String JSONFileWithLicensesInformationForFiles = analyzeProject(packageName,packageVersion);
-
-                // Parsing the JSON created by the analyzeProject function
-                JSONArray fileLicenses = parseScanResult(JSONFileWithLicensesInformationForFiles);
-                if (fileLicenses != null && !fileLicenses.isEmpty()) {
-                    detectedLicenses.addFiles(fileLicenses);
-                } else {
-                    logger.warn("The analyzer hasn't detected any licenses in " + JSONFileWithLicensesInformationForFiles + ".");
-                }
-
-            } catch (Exception e) { // Fasten error-handling guidelines
-                logger.error(e.getMessage(), e.getCause());
-                setPluginError(e);
+                packageVersion = "latest";
+                HttpGetCount = 0;
+                FilesCount = 0;
+                FilesWithLicensesCount = 0;
+                NumberOfFilesWithDoubleEntries = 0;
+                file = null;
+                FileDoubleEntered = null;
             }
         }
 
@@ -317,19 +344,19 @@ public class LicenseDetectorPlugin extends Plugin {
          * @return the package version
          * @throws IllegalArgumentException in case the function couldn't find the package version.
          */
-        protected String extractPackageVersion(String record) throws IllegalArgumentException {
-            var payload = new JSONObject(record);
-            if (payload.has("fasten.RepoCloner.out")) {
-                payload = payload.getJSONObject("fasten.RepoCloner.out");
+        protected String extractPackageVersion(JSONObject json) throws IllegalArgumentException {
+            for (var key : json.keySet()) {
+                if (key.equals("version")) {
+                    return json.getString("version");
+                } else {
+                    var other = json.get(key);
+                    if (other instanceof JSONObject) {
+                        var nestedResult = findPayload((JSONObject) other);
+                        if(nestedResult != null) return nestedResult;
+                    }
+                }
             }
-            if (payload.has("payload")) {
-                payload = payload.getJSONObject("payload");
-            }
-            String packageVersion = payload.getString("version");
-            if (packageVersion == null) {
-                throw new IllegalArgumentException("Invalid version information: missing version information.");
-            }
-            return packageVersion;
+            return null;
         }
 
         /**
@@ -341,15 +368,19 @@ public class LicenseDetectorPlugin extends Plugin {
          * @param record the input record containing package information.
          * @return the package name.
          */
-        protected String extractPackageName(String record) {
-            var payload = new JSONObject(record);
-            if (payload.has("fasten.RepoCloner.out")) {
-                payload = payload.getJSONObject("fasten.RepoCloner.out");
+        protected String extractPackageName(JSONObject json) {
+            for (var key : json.keySet()) {
+                if (key.equals("product")) {
+                    return json.getString("product");
+                } else {
+                    var other = json.get(key);
+                    if (other instanceof JSONObject) {
+                        var nestedResult = findPayload((JSONObject) other);
+                        if(nestedResult != null) return nestedResult;
+                    }
+                }
             }
-            if (payload.has("payload")) {
-                payload = payload.getJSONObject("payload");
-            }
-            return payload.getString("artifactId");
+            return null;
         }
 
         /**
@@ -370,7 +401,6 @@ public class LicenseDetectorPlugin extends Plugin {
             }
             return payload.getString("repoUrl");
         }
-
 
         // this method was calling the previous version of RetrieveLicenseAndPath, TODO check if with RetrieveLicenseAndPathJSON all it is functioning
         /**
