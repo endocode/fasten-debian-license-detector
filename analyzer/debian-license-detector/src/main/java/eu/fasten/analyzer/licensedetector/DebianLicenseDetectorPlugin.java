@@ -1,4 +1,4 @@
-package eu.fasten.analyzer.licensedetector;
+package eu.fasten.analyzer.debianlicensedetector;
 
 import com.google.common.collect.Sets;
 import eu.fasten.core.data.metadatadb.license.DetectedLicense;
