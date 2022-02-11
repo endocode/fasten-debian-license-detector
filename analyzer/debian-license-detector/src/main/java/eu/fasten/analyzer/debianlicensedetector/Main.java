@@ -18,7 +18,7 @@
 
 package eu.fasten.analyzer.debianlicensedetector;
 
-//@CommandLine.Command(name = "DebianLicenseDetector")
+@CommandLine.Command(name = "DebianLicenseDetector")
 public class Main implements Runnable {
     @Override
     public void run() {
